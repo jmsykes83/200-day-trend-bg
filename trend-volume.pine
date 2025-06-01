@@ -1,0 +1,47 @@
+//@version=5
+indicator("200-Day Trend Background (Smoothed Volume Gradient)", overlay=true)
+
+// === Inputs ===
+neutralZone = input.float(3.0, title="Neutral Zone Slope Threshold", minval=0.0, step=0.5)
+volLookback = input.int(50, title="Volume Normalization Lookback")
+smoothingLength = input.int(5, title="Volume Smoothing Length (EMA)")
+
+// === Pull daily 200 SMA on 4H bars ===
+sma200_daily = request.security(syminfo.tickerid, "240", ta.sma(close, 200))
+sma200_daily_prev = request.security(syminfo.tickerid, "240", ta.sma(close, 200)[5])
+
+// === Calculate slope ===
+slope = sma200_daily - sma200_daily_prev
+
+// === Determine trend ===
+bullish = slope > neutralZone
+bearish = slope < -neutralZone
+neutral = not bullish and not bearish
+
+// === Get daily volume for gradient ===
+vol_daily = request.security(syminfo.tickerid, "30", volume)
+
+// === Normalize volume ===
+vol_max = ta.highest(vol_daily, volLookback)
+vol_min = ta.lowest(vol_daily, volLookback)
+vol_norm_raw = vol_max != vol_min ? (vol_daily - vol_min) / (vol_max - vol_min) : 0.5  // 0 to 1 normalized
+
+// === Smooth normalized volume with EMA ===
+vol_norm = ta.ema(vol_norm_raw, smoothingLength)
+
+// === Opacity base and range ===
+opacity_min = input(50, "Opacity Min")   // least transparent (max opacity)
+opacity_max = input(96, "Opacity Max")   // most transparent (min opacity)
+opacity_range = opacity_max - opacity_min
+
+// === Calculate opacity from smoothed volume ===
+opacity = math.round(opacity_max - vol_norm * opacity_range)
+
+// === Set background color with volume gradient ===
+bgBull=input(color.green,"BG Bull")
+bgBear=input(color.red,"BG Bear")
+bgNutral =input(color.blue,"BG Nutral")
+bgcolor(    bullish ? color.new(bgBull, opacity) :    bearish ? color.new(bgBear, opacity) :    color.new(bgNutral, opacity))
+
+// === Plot 200-day SMA ===
+plot(sma200_daily, title="200-Day SMA (Daily)", color=color.orange, linewidth=2)
